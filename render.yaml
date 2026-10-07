@@ -1,0 +1,5 @@
+services:
+  - type: web
+    name: energy-research-pilot
+    runtime: static
+    staticPublishPath: .
