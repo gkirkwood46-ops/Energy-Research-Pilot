@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Seasonality Workbench · Tester Build</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#172637;background:#f3f6f9}*{box-sizing:border-box}body{margin:0}.wrap{max-width:980px;margin:30px auto;padding:0 16px}h1{margin:5px 0;font-size:30px}p{color:#526276;line-height:1.5}.card{background:white;border:1px solid #d9e1e8;border-radius:14px;padding:20px;margin:16px 0}label{font-weight:700;display:block;margin:10px 0 5px}select,input{padding:10px;border:1px solid #b8c6d3;border-radius:8px;max-width:100%;font:inherit}.controls{display:flex;gap:18px;flex-wrap:wrap}.controls>div{flex:1;min-width:160px}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.metric{background:#edf3f8;border-radius:10px;padding:15px}.metric b{font-size:24px;display:block}.metric span{font-size:12px;color:#516174}.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #e0e6eb;text-align:right}th:first-child,td:first-child{text-align:left}.flag{border-left:4px solid #b66b16;background:#fff7e9;padding:12px;margin-top:14px}.small{font-size:13px;color:#5b6a79}.positive{color:#18633d}.negative{color:#a52b31}.hidden{display:none}@media(max-width:600px){.metrics{grid-template-columns:1fr}h1{font-size:24px}}
+</style></head><body><main class="wrap">
+<div class="small">ENERGY RESEARCH PILOT · DEVELOPMENT WORKBENCH</div>
+<h1>Explore historical seasonality</h1>
+<p>Research, not recommendations. This workbench processes a CSV locally in your browser. It does not upload data or issue Buy, Hold, or Sell ratings.</p>
+<section class="card"><label for="file">Historical daily CSV</label><input id="file" type="file" accept=".csv,text/csv">
+<p class="small">Expected columns: <code>date</code> and <code>adjusted_close</code> (EODHD-style). Results depend on the vendor's adjustment policy, which still requires independent verification.</p>
+<div class="controls"><div><label for="month">Calendar month</label><select id="month"></select></div><div><label for="years">Historical window</label><select id="years"><option value="5">5 years</option><option value="10">10 years</option><option value="15" selected>15 years</option></select></div><div><label for="asof">Last complete year</label><select id="asof"></select></div></div>
+<p id="status" role="status">Choose a historical CSV to begin.</p></section>
+<section class="card hidden" id="results"><h2 id="heading"></h2><div class="metrics"><div class="metric"><span>Average monthly return</span><b id="avg"></b></div><div class="metric"><span>Winning years</span><b id="wins"></b></div><div class="metric"><span>Years of data</span><b id="coverage"></b></div></div>
+<div id="flag" class="flag hidden"></div><h3>Individual annual returns</h3><div class="tablewrap"><table><thead><tr><th>Year</th><th>Monthly return</th></tr></thead><tbody id="rows"></tbody></table></div><p class="small">Monthly return uses the last available adjusted close of the previous calendar month and the selected month. Missing calendar months are never bridged. Positive return means greater than 0%.</p></section>
+</main><script src="seasonality-engine.js"></script><script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id), names=["January","February","March","April","May","June","July","August","September","October","November","December"];
+names.forEach((n,i)=>$("month").add(new Option(n,i+1)));$("month").value="11";
+let returns=[],filename="";
+const fmt=n=>n==null?"—":(n>0?"+":"")+n.toFixed(2)+"%";
+function parseCSV(text){
+ const lines=text.replace(/^\uFEFF/,"").trim().split(/\r?\n/).filter(Boolean);
+ if(lines.length<2)throw Error("CSV contains no daily price records.");
+ // Supports quoted fields, escaped double quotes and comma-separated EODHD exports.
+ function fields(line){const out=[];let v="",quoted=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(quoted&&line[i+1]==='"'){v+='"';i++;}else quoted=!quoted;}else if(c===","&&!quoted){out.push(v.trim());v="";}else v+=c;}out.push(v.trim());return out;}
+ const headers=fields(lines.shift()).map(s=>s.toLowerCase().replace(/^\uFEFF/,"").replace(/\s+/g,"_"));
+ const di=headers.indexOf("date"),pi=headers.indexOf("adjusted_close");
+ if(di<0||pi<0)throw Error("CSV must contain date and adjusted_close columns.");
+ return lines.map(line=>{const c=fields(line);return {date:c[di],adjusted_close:c[pi]};});
+}
+function render(){
+ if(!returns.length)return;
+ const month=Number($("month").value),years=Number($("years").value),asof=Number($("asof").value);
+ const s=SeasonalityEngine.summary(returns,month,years,asof);
+ $("results").classList.remove("hidden");
+ $("heading").textContent=names[month-1]+" · "+filename;
+ $("avg").textContent=fmt(s.averageReturnPct);
+ $("wins").textContent=s.winningYears+" / "+s.yearsAvailable;
+ $("coverage").textContent=s.yearsAvailable+" / "+years;
+ $("status").textContent=s.complete?"Complete historical window.":"Incomplete historical window: only "+s.yearsAvailable+" of "+years+" requested years available.";
+ $("rows").replaceChildren();
+ for(const r of [...s.observations].reverse()){const tr=document.createElement("tr"),y=document.createElement("td"),v=document.createElement("td");y.textContent=r.year;v.textContent=fmt(r.returnPct);v.className=r.returnPct>=0?"positive":"negative";tr.append(y,v);$("rows").append(tr);}
+ const flag=$("flag");flag.classList.add("hidden");flag.textContent="";
+ if(s.yearsAvailable>=5){
+  const sorted=[...s.observations].sort((a,b)=>Math.abs(b.returnPct-s.averageReturnPct)-Math.abs(a.returnPct-s.averageReturnPct));
+  const candidate=sorted[0],other=s.observations.filter(x=>x!==candidate);
+  const without=other.reduce((a,x)=>a+x.returnPct,0)/other.length;
+  const shift=Math.abs(s.averageReturnPct-without);
+  // A transparent influence screen, not a claim that an event is a black swan.
+  if(shift>=2){
+   flag.classList.remove("hidden");
+   flag.textContent="Unusual influence worth examining: "+candidate.year+" returned "+fmt(candidate.returnPct)+". The average is "+fmt(s.averageReturnPct)+" with that year and "+fmt(without)+" without it (difference "+shift.toFixed(2)+" percentage points). The original average retains every year. This is a sensitivity check, not an automatic black-swan classification.";
+  }
+ }
+}
+$("file").addEventListener("change",async e=>{
+ const file=e.target.files[0];if(!file)return;
+ try{
+  const rows=parseCSV(await file.text());returns=SeasonalityEngine.monthlyReturns(rows);filename=file.name;
+  if(!returns.length)throw Error("No valid consecutive calendar-month returns were found.");
+  const years=[...new Set(returns.map(x=>x.year))].sort((a,b)=>b-a);
+  $("asof").replaceChildren();years.forEach(y=>$("asof").add(new Option(y,y)));
+  const today=new Date(),current=today.getFullYear();
+  $("asof").value=String(years.find(y=>y<current)||years[0]);
+  render();
+ }catch(err){returns=[];$("results").classList.add("hidden");$("status").textContent="Could not load CSV: "+err.message;}
+});
+["month","years","asof"].forEach(id=>$(id).addEventListener("change",render));
+})();
+</script></body></html>
