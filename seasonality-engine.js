@@ -25,7 +25,17 @@ function summary(returns,month,years,asOfYear){
  if(!Number.isInteger(month)||month<1||month>12||!Number.isInteger(years)||years<1||!Number.isInteger(asOfYear))throw new RangeError("Invalid summary parameters");
  const observations=returns.filter(r=>r.month===month&&r.year<=asOfYear&&r.year>asOfYear-years&&Number.isFinite(r.returnPct)).sort((a,b)=>a.year-b.year);
  const count=observations.length;
- return {month,yearsRequested:years,yearsAvailable:count,complete:count===years,winningYears:observations.filter(r=>r.returnPct>0).length,averageReturnPct:count?observations.reduce((s,r)=>s+r.returnPct,0)/count:null,observations};
+ const values=observations.map(r=>r.returnPct).sort((a,b)=>a-b);
+ const medianReturnPct=count?(count%2?values[(count-1)/2]:(values[count/2-1]+values[count/2])/2):null;
+ const averageReturnPct=count?values.reduce((sum,v)=>sum+v,0)/count:null;
+ // Leave-one-out influence: show the observation with the largest absolute effect on the mean.
+ // The 2 percentage-point display threshold is provisional and needs validation.
+ const influences=count>=5?observations.map(r=>{
+  const averageWithoutPct=(averageReturnPct*count-r.returnPct)/(count-1);
+  return {year:r.year,returnPct:r.returnPct,averageWithoutPct,shiftPp:Math.abs(averageReturnPct-averageWithoutPct)};
+ }).sort((a,b)=>b.shiftPp-a.shiftPp||a.year-b.year):[];
+ const influentialYear=influences.length&&influences[0].shiftPp>=2?influences[0]:null;
+ return {month,yearsRequested:years,yearsAvailable:count,complete:count===years,winningYears:observations.filter(r=>r.returnPct>0).length,averageReturnPct,medianReturnPct,influentialYear,observations};
 }
 return {monthlyReturns,summary};
 });
