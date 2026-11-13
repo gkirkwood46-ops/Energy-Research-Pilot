@@ -6,14 +6,23 @@
 </style></head><body><div class="shell">
 <div class="top"><div><div class="eyebrow">Energy research pilot · build 0.3</div><div class="title">Research the company, not just the ticker.</div><div class="sub">Four-company pilot. Reported information first. Interpretation is optional. Evidence stays attached.</div></div><div class="badge">CNQ · SU · CVE · IMO</div></div>
 <div class="tickerbar" id="tickers"></div>
-<div class="notice" style="margin:0 0 16px;border-left:4px solid var(--accent);background:#eaf1f7">
-<strong>Seasonality research · development preview</strong>
-<p style="margin:6px 0">Explore monthly returns, winning years and unusual-year sensitivity with your own historical CSV. This workbench is experimental; it is not yet connected to the selected ticker or to an automated data feed.</p>
-<a href="seasonality-workbench.html" style="color:var(--accent);font-weight:800">Open seasonality workbench →</a>
-</div>
+
 
 <div class="flow"><span>Chart</span><span>Technical Interpretation</span><span>Seasonality</span><span>Company Story</span><span>Financial Interpretation</span><span>Filings</span><span>Peer Comparison</span></div>
 <section class="card" id="marketChart" style="margin-bottom:16px"><div class="companyhead"><div><h2 id="chartHeading">CNQ · TSX price chart</h2><div class="muted">Daily candlesticks · Canadian dollars · TradingView market data</div></div><div class="badge" style="display:block">Third-party chart</div></div><div class="notice" id="chartNote" style="margin-bottom:12px">This is a real market chart, not sample data. The chart provider controls quote delay, history, and corporate-action adjustments. End-of-day research is our goal.</div><div class="tv-container" id="tvContainer" aria-label="Daily candlestick stock chart"></div><div class="tiny">Choose CNQ, SU, CVE or IMO above to change the chart. Use TradingView's interval and date-range controls to explore history. Our own indicators and seasonality will follow after historical data validation.</div></section>
+<section class="card" id="seasonality" style="margin-bottom:16px">
+<div class="companyhead"><div><h2 id="seasonHeading">CNQ · Historical seasonality</h2><div class="muted">Average monthly return, winning years and historical coverage. Research, not recommendations.</div></div><div class="badge" style="display:block">Historical data · local CSV</div></div>
+<div class="notice">Development preview: select a stock above, then load that stock's historical CSV below. No automatic price feed is connected yet. Files stay in your browser. The chart and seasonality may use different data vendors and adjustments.</div>
+<label for="seasonFile" style="display:block;font-weight:700;margin:12px 0 5px">Load <span id="seasonTicker">CNQ</span> historical CSV</label>
+<input type="file" id="seasonFile" accept=".csv,text/csv" aria-label="Historical daily CSV for selected stock">
+<div class="tiny" style="margin-top:5px">Required columns: date and adjusted_close (EODHD-style). Confirm the file matches the selected ticker. Vendor adjustment policy remains to be verified.</div>
+<div class="btnrow" style="align-items:end"><label>Calendar month<br><select id="seasonMonth" class="btn"></select></label><label>Historical window<br><select id="seasonYears" class="btn"><option value="5">5 years</option><option value="10">10 years</option><option value="15" selected>15 years</option></select></label><label>Last complete year<br><select id="seasonAsOf" class="btn"></select></label></div>
+<p id="seasonStatus" class="muted" role="status">Load a CSV for CNQ to see its seasonality.</p>
+<div id="seasonResults" style="display:none"><div class="metricrow"><div class="metric"><span>Average monthly return</span><b id="seasonAvg">—</b></div><div class="metric"><span>Winning years</span><b id="seasonWins">—</b></div><div class="metric"><span>Years of data</span><b id="seasonCoverage">—</b></div></div>
+<div class="notice" id="seasonFlag" style="display:none;border-left:4px solid #b66b16"></div>
+<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700">Individual annual returns</summary><div class="tablewrap" style="margin-top:10px"><table style="min-width:0"><thead><tr><th>Year</th><th>Monthly return</th></tr></thead><tbody id="seasonRows"></tbody></table></div></details>
+<div class="tiny" style="margin-top:9px">Returns compare the prior month's last adjusted close with the selected month's last adjusted close. Missing months are not bridged. Current incomplete months are excluded.</div></div>
+</section>
 <div class="grid">
 <section class="card"><div class="companyhead"><div><div class="companyname" id="companyName"></div><div class="symbol" id="companySymbol"></div></div><button class="btn" onclick="document.getElementById('compare').scrollIntoView({behavior:'smooth'})">Compare peers</button></div>
 <div class="tabs"><button class="btn tab active" data-panel="story">Company Story</button><button class="btn tab" data-panel="financial">Financial Interpretation</button><button class="btn tab" data-panel="filings">Evidence</button></div>
@@ -40,6 +49,7 @@
 </div></section>
 <div class="bottom tiny">Pilot 0.3 · Four companies only · No ranking · No buy/sell language · Reported facts and interpretation remain visibly separate.</div>
 </div>
+<script src="seasonality-engine.js"></script>
 <script>
 const companies={
 CNQ:{name:'Canadian Natural Resources',symbol:'TSX: CNQ',what:'A diversified crude oil and natural gas producer with oil sands mining and upgrading, thermal in-situ, conventional oil and natural gas operations.',where:'Primarily Western Canada, with additional international operations. Its asset base includes long-life oil sands mining/upgrading plus thermal and conventional production.',changed:'2025 production reached a record ~1.571 million BOE/day. Acquisitions and an AOSP asset swap materially changed the asset base.',q:[['Is the business growing?','Production rose about 15% in 2025 to a record ~1.571M BOE/day.'],['Is it making money?','Reported earnings were $10.82B ⚑, but adjusted net earnings from operations were $7.44B. The difference matters.'],['Is it generating cash?','Adjusted funds flow was approximately $15.5B.'],['What is happening with debt?','CNQ says net debt fell by approximately $2.7B during 2025.'],['What deserves a flag?','Headline earnings. A large amount of non-operating income affected the reported result.']],sources:[['2025 Annual / Financial Reports','https://www.cnrl.com/investors/financials/'],['2025 Q4 MD&A','https://www.cnrl.com/content/uploads/2025/10/12.31.2025-Q4-MDA.pdf'],['2025 year-end release','https://www.cnrl.com/news-releases/canadian-natural-announces-2025-fourth-quarter-and-year-end-results-2/']]},
@@ -62,7 +72,59 @@ function loadMarketChart(ticker){
   const link=document.createElement('a');link.href='https://www.tradingview.com/';link.target='_blank';link.rel='noopener nofollow';link.textContent='Chart by TradingView';credit.appendChild(link);outer.appendChild(credit);
   container.appendChild(outer);
 }
-let current='CNQ';function render(){const c=companies[current];document.querySelectorAll('.ticker').forEach(x=>x.classList.toggle('active',x.dataset.t===current));companyName.textContent=c.name;companySymbol.textContent=c.symbol;loadMarketChart(current);what.textContent=c.what;where.textContent=c.where;changed.textContent=c.changed;questions.innerHTML=c.q.map(x=>`<div class="question"><div class="qtitle">${x[0]}</div><div class="answer">${x[1]}</div></div>`).join('');sources.innerHTML=c.sources.map(x=>`<a href="${x[1]}" target="_blank">${x[0]} ↗</a>`).join('')}
+const seasonNames=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const seasonFiles={};const seasonMonth=document.getElementById('seasonMonth'),seasonYears=document.getElementById('seasonYears'),seasonAsOf=document.getElementById('seasonAsOf');
+seasonNames.forEach((n,i)=>seasonMonth.add(new Option(n,i+1)));seasonMonth.value=String(new Date().getMonth()+1);
+const seasonEl=id=>document.getElementById(id);
+const seasonFmt=n=>n==null?'—':(n>0?'+':'')+n.toFixed(2)+'%';
+function seasonCsvFields(line){const out=[];let v='',quoted=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(quoted&&line[i+1]==='"'){v+='"';i++}else quoted=!quoted}else if(c===','&&!quoted){out.push(v.trim());v=''}else v+=c}out.push(v.trim());return out}
+function seasonParseCsv(raw){
+ const lines=raw.replace(/^\uFEFF/,'').trim().split(/\r?\n/).filter(Boolean);
+ if(lines.length<2)throw Error('CSV has no price records.');
+ const header=seasonCsvFields(lines.shift()).map(v=>v.toLowerCase().replace(/\s+/g,'_'));
+ const di=header.indexOf('date'),pi=header.indexOf('adjusted_close');
+ if(di<0||pi<0)throw Error('CSV needs date and adjusted_close columns.');
+ return lines.map(line=>{const cells=seasonCsvFields(line);return {date:cells[di],adjusted_close:cells[pi]}});
+}
+function seasonRender(){
+ const data=seasonFiles[current],results=seasonEl('seasonResults');
+ seasonEl('seasonHeading').textContent=current+' · Historical seasonality';
+ seasonEl('seasonTicker').textContent=current;
+ seasonEl('seasonFile').value='';
+ if(!data){results.style.display='none';seasonEl('seasonStatus').textContent='Load a CSV for '+current+' to see its seasonality.';seasonAsOf.replaceChildren();return}
+ seasonAsOf.replaceChildren();
+ const available=[...new Set(data.returns.map(x=>x.year))].sort((a,b)=>b-a);
+ const latestComplete=new Date().getFullYear()-1;
+ available.forEach(y=>seasonAsOf.add(new Option(y,y)));
+ seasonAsOf.value=String(available.find(y=>y<=latestComplete)||available[0]);
+ seasonUpdate();
+}
+function seasonUpdate(){
+ const data=seasonFiles[current];if(!data)return;
+ const m=Number(seasonMonth.value),y=Number(seasonYears.value),asof=Number(seasonAsOf.value);
+ const summary=SeasonalityEngine.summary(data.returns,m,y,asof);
+ seasonEl('seasonResults').style.display='block';
+ seasonEl('seasonAvg').textContent=seasonFmt(summary.averageReturnPct);
+ seasonEl('seasonWins').textContent=summary.winningYears+' / '+summary.yearsAvailable;
+ seasonEl('seasonCoverage').textContent=summary.yearsAvailable+' / '+y;
+ seasonEl('seasonStatus').textContent=data.filename+' · '+seasonNames[m-1]+' · '+(summary.complete?'Complete historical window.':'Incomplete window: '+summary.yearsAvailable+' of '+y+' years available.');
+ const rows=seasonEl('seasonRows');rows.replaceChildren();
+ for(const item of [...summary.observations].reverse()){const tr=document.createElement('tr'),a=document.createElement('td'),b=document.createElement('td');a.textContent=item.year;b.textContent=seasonFmt(item.returnPct);tr.append(a,b);rows.append(tr)}
+ const flag=seasonEl('seasonFlag');flag.style.display='none';flag.textContent='';
+ if(summary.influentialYear){const x=summary.influentialYear;flag.style.display='block';flag.textContent='One year materially influences the average: '+x.year+' returned '+seasonFmt(x.returnPct)+'. Average with that year: '+seasonFmt(summary.averageReturnPct)+'; without: '+seasonFmt(x.averageWithoutPct)+' (difference '+x.shiftPp.toFixed(2)+' percentage points). All years remain included. The 2-percentage-point threshold is provisional.'}
+}
+seasonEl('seasonFile').addEventListener('change',async e=>{
+ const file=e.target.files[0];if(!file)return;
+ const ticker=current;
+ try{
+  const returns=SeasonalityEngine.monthlyReturns(seasonParseCsv(await file.text()));
+  if(!returns.length)throw Error('No valid consecutive calendar-month returns found.');
+  seasonFiles[ticker]={filename:file.name,returns};
+  if(current===ticker)seasonRender();
+ }catch(err){seasonEl('seasonStatus').textContent='Could not load CSV: '+err.message}
+});
+[seasonMonth,seasonYears,seasonAsOf].forEach(el=>el.addEventListener('change',seasonUpdate));
+let current='CNQ';function render(){const c=companies[current];document.querySelectorAll('.ticker').forEach(x=>x.classList.toggle('active',x.dataset.t===current));companyName.textContent=c.name;companySymbol.textContent=c.symbol;loadMarketChart(current);seasonRender();what.textContent=c.what;where.textContent=c.where;changed.textContent=c.changed;questions.innerHTML=c.q.map(x=>`<div class="question"><div class="qtitle">${x[0]}</div><div class="answer">${x[1]}</div></div>`).join('');sources.innerHTML=c.sources.map(x=>`<a href="${x[1]}" target="_blank">${x[0]} ↗</a>`).join('')}
 const tickers=document.getElementById('tickers');Object.keys(companies).forEach(t=>{const b=document.createElement('button');b.className='ticker';b.dataset.t=t;b.textContent=t;b.onclick=()=>{current=t;render();window.scrollTo({top:0,behavior:'smooth'})};tickers.appendChild(b)});render();
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.panel).classList.add('active')});
 analysisBtn.onclick=()=>{analysis.classList.add('open');analysisBtn.style.display='none';hideBtn.style.display='inline-block'};hideBtn.onclick=()=>{analysis.classList.remove('open');analysisBtn.style.display='inline-block';hideBtn.style.display='none'};
