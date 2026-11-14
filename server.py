@@ -1,5 +1,6 @@
 """Private-development EODHD bridge. Never place API tokens in browser code."""
 import os
+import secrets
 import time
 from datetime import date
 from threading import Lock
@@ -25,6 +26,11 @@ def history():
     symbol = request.args.get("symbol", "").strip().upper()
     if symbol not in ALLOWED_SYMBOLS:
         return jsonify(error="Symbol not enabled for this test"), 400
+
+    access_key = os.environ.get("DATA_TEST_ACCESS_KEY")
+    supplied_key = request.headers.get("X-Test-Access-Key", "")
+    if not access_key or not secrets.compare_digest(supplied_key, access_key):
+        return jsonify(error="Unauthorized"), 401
 
     token = os.environ.get("EODHD_API_TOKEN")
     if not token:
